@@ -32,26 +32,30 @@ func SetUnless(name, value string) (bool, error) {
 }
 
 func MergeFlags() error {
+	return MergeFlagSets(flag.CommandLine, pflag.CommandLine)
+}
+
+func MergeFlagSets(from *flag.FlagSet, to *pflag.FlagSet) error {
 	if merged {
 		return nil
 	}
 
-	if flag.Parsed() {
+	if from.Parsed() {
 		return errors.New("cannot merge flags from package \"flag\": package already parsed")
 	}
 
-	if pflag.Parsed() {
+	if to.Parsed() {
 		return errors.New("cannot merge flags into package \"github.com/spf13/pflag\": package already parsed")
 	}
 
 	var cnf []string
 
-	flag.VisitAll(func(f *flag.Flag) {
-		if pf := pflag.CommandLine.Lookup(f.Name); pf != nil {
+	from.VisitAll(func(f *flag.Flag) {
+		if pf := to.Lookup(f.Name); pf != nil {
 			cnf = append(cnf, f.Name)
 			return
 		}
-		pflag.CommandLine.AddGoFlag(f)
+		to.AddGoFlag(f)
 	})
 
 	if len(cnf) > 0 {
