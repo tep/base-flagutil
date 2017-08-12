@@ -9,26 +9,12 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// TODO(tep): Write Tests!!
+// TODO(tep): Write More Tests!!
 
 var merged bool
 
 func Merged() bool {
 	return merged
-}
-
-func SetUnless(name, value string) (bool, error) {
-	if _, ok, err := ValueIsSet(name); err != nil {
-		return false, err
-	} else if ok {
-		return false, nil
-	}
-
-	if err := pflag.Set(name, value); err != nil {
-		return false, err
-	}
-
-	return true, nil
 }
 
 func MergeFlags() error {
