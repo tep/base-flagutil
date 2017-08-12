@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/spf13/pflag"
 )
@@ -65,12 +66,21 @@ func MergeFlags() error {
 	return nil
 }
 
+// Used by unit tests to override command line aarguments
+var rawArgs []string
+
+func init() {
+	rawArgs = os.Args[1:]
+}
+
 func MergeAndParse() error {
 	if err := MergeFlags(); err != nil {
 		return err
 	}
 
-	pflag.Parse()
+	if err := pflag.CommandLine.Parse(rawArgs); err != nil {
+		return err
+	}
 
 	return nil
 }
