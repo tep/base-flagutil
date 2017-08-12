@@ -16,24 +16,6 @@ func Merged() bool {
 	return merged
 }
 
-func ValueIsSet(name string) (string, bool, error) {
-	if err := MergeAndParse(); err != nil {
-		return "", false, err
-	}
-
-	var isSet bool
-	value := pflag.Lookup(name).Value.String()
-
-	pflag.Visit(func(pf *pflag.Flag) {
-		if pf.Name == name {
-			isSet = true
-			value = pf.Value.String()
-		}
-	})
-
-	return value, isSet, nil
-}
-
 func SetUnless(name, value string) (bool, error) {
 	if _, ok, err := ValueIsSet(name); err != nil {
 		return false, err
