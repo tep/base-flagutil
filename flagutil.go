@@ -56,11 +56,11 @@ func MergeFlagSets(from *flag.FlagSet, to *pflag.FlagSet) error {
 	return nil
 }
 
-// Used by unit tests to override command line aarguments
-var rawArgs []string
+// Used by unit tests to override command line arguments
+var cmdlineArgs []string
 
 func init() {
-	rawArgs = os.Args[1:]
+	cmdlineArgs = os.Args[1:]
 }
 
 func MergeAndParse() error {
@@ -68,7 +68,7 @@ func MergeAndParse() error {
 		return err
 	}
 
-	if err := pflag.CommandLine.Parse(rawArgs); err != nil {
+	if err := pflag.CommandLine.Parse(cmdlineArgs); err != nil {
 		return err
 	}
 

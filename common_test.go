@@ -1,5 +1,10 @@
 package flagutil
 
+import (
+	"flag"
+	"github.com/spf13/pflag"
+)
+
 const (
 	boolFlagName  = "bool_flag"
 	testFlagName  = "string_flag"
@@ -25,4 +30,12 @@ func (p flagPackage) String() string {
 		s = "spf13"
 	}
 	return s
+}
+
+func resetForTest(name string) {
+	merged = false
+	cmdlineArgs = []string{}
+
+	flag.CommandLine = flag.NewFlagSet("test:"+name, flag.ContinueOnError)
+	pflag.CommandLine = pflag.NewFlagSet("test:"+name, pflag.ContinueOnError)
 }

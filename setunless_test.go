@@ -17,12 +17,6 @@ type setUnlessTestcase struct {
 }
 
 func (tc *setUnlessTestcase) test(t *testing.T) {
-	merged = false
-	rawArgs = []string{}
-
-	flag.CommandLine = flag.NewFlagSet("test:"+tc.name, flag.ContinueOnError)
-	pflag.CommandLine = pflag.NewFlagSet("test:"+tc.name, pflag.ContinueOnError)
-
 	var testvar string
 	dval := "default-value"
 
@@ -35,7 +29,7 @@ func (tc *setUnlessTestcase) test(t *testing.T) {
 	}
 
 	if tc.fval != "" {
-		rawArgs = []string{"--" + testFlagName, tc.fval}
+		cmdlineArgs = []string{"--" + testFlagName, tc.fval}
 	}
 
 	if err := MergeAndParse(); err != nil {
@@ -65,6 +59,7 @@ func TestSetUnless(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		resetForTest(tc.name)
 		t.Run(tc.name, tc.test)
 	}
 }

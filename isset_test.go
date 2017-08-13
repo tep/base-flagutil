@@ -54,17 +54,11 @@ func newIsSetTestcase(fpkg flagPackage, set bool) *isSetTestcase {
 }
 
 func (tc *isSetTestcase) test(t *testing.T) {
-	merged = false
-	rawArgs = []string{}
-
-	flag.CommandLine = flag.NewFlagSet("test:"+tc.name, flag.ContinueOnError)
-	pflag.CommandLine = pflag.NewFlagSet("test:"+tc.name, pflag.ContinueOnError)
-
 	var want string
 	var wset bool
 
 	if tc.fpkg != fpNone {
-		rawArgs = tc.args
+		cmdlineArgs = tc.args
 
 		want = tc.want
 		dval := "default-value"
@@ -101,6 +95,7 @@ func TestValueIsSet(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		resetForTest(tc.name)
 		t.Run(tc.name, tc.test)
 	}
 }
