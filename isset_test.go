@@ -7,20 +7,6 @@ import (
 	"github.com/spf13/pflag"
 )
 
-const (
-	boolFlagName  = "bool_flag"
-	testFlagName  = "string_flag"
-	testFlagValue = "the-value"
-)
-
-type flagPackage int
-
-const (
-	fpNone flagPackage = iota
-	fpBase
-	fpSPF13
-)
-
 type isSetTestcase struct {
 	name string
 	fpkg flagPackage
