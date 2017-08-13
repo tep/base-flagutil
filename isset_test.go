@@ -57,8 +57,8 @@ func (tc *isSetTestcase) test(t *testing.T) {
 	merged = false
 	rawArgs = []string{}
 
-	flag.CommandLine = flag.NewFlagSet("nodef:"+tc.name, flag.ContinueOnError)
-	pflag.CommandLine = pflag.NewFlagSet("nodef:"+tc.name, pflag.ContinueOnError)
+	flag.CommandLine = flag.NewFlagSet("test:"+tc.name, flag.ContinueOnError)
+	pflag.CommandLine = pflag.NewFlagSet("test:"+tc.name, pflag.ContinueOnError)
 
 	var want string
 	var wset bool
