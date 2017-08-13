@@ -33,19 +33,19 @@ func newIsSetTestcase(fpkg flagPackage, set bool) *isSetTestcase {
 
 	switch {
 	case fpkg == fpNone:
-		name = "no-flags-defined"
+		name = "no-flags"
 
 	case fpkg == fpBase && set:
-		name = "base-flag-isset"
+		name = "base-isset"
 
 	case fpkg == fpBase:
-		name = "base-flag-noset"
+		name = "base-noset"
 
 	case fpkg == fpSPF13 && set:
-		name = "spf13-pflag-isset"
+		name = "spf13-isset"
 
 	case fpkg == fpSPF13:
-		name = "spf13-pflag-noset"
+		name = "spf13-noset"
 	}
 
 	tc := &isSetTestcase{
