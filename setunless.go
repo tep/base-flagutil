@@ -2,8 +2,6 @@ package flagutil
 
 import "github.com/spf13/pflag"
 
-// TODO(tep): Write Unit Tests!!
-
 func SetUnless(name, value string) (bool, error) {
 	if _, ok, err := ValueIsSet(name); err != nil {
 		return false, err
