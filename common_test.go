@@ -33,7 +33,7 @@ func (p flagPackage) String() string {
 }
 
 func resetForTest(name string) {
-	merged = false
+	merged = make(map[string]bool)
 	cmdlineArgs = []string{}
 
 	flag.CommandLine = flag.NewFlagSet("test:"+name, flag.ContinueOnError)
