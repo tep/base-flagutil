@@ -1,128 +1,277 @@
+// Copyright © 2017 Tim Peoples <coders@toolman.org>
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+// TODO(tep): Move this to "toolman.org/flags/flagsgroup"
+
 package flagutil // import "toolman.org/base/flagutil"
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
-	"toolman.org/encoding/base56"
 )
 
-// TODO(tep): Write More Tests!!
-
 var (
-	merged      = make(map[string]bool)
-	cmdlineArgs []string
-
-	baseParsedError  = errors.New("cannot merge flags from package \"flag\": package already parsed")
-	spf13ParsedError = errors.New("cannot merge flags into package \"github.com/spf13/pflag\": package already parsed")
+	FlagSetName     = os.Args[0]
+	CommandLineArgs = os.Args[1:]
+	GoFlagSet       = flag.CommandLine
+	PFlagSet        = pflag.CommandLine
+	debug           = false
+	timenow         = time.Now
+	pid             = os.Getpid()
 )
 
 func init() {
-	// cmdlineArgs is used to override command line args in unit tests,
-	// otherwise it's the real command-line arguments from os.Args
-	cmdlineArgs = os.Args[1:]
+	debug, _ = strconv.ParseBool(os.Getenv("FLAGUTIL_DEBUG"))
+	mergeGoFlagSet(true, PFlagSet, GoFlagSet)
 }
 
-func mergeKey(from *flag.FlagSet, to *pflag.FlagSet) string {
-	b56 := func(i interface{}) string { return base56.Encode(uint64(reflect.ValueOf(i).Pointer())) }
-	return fmt.Sprintf("%s:%s", b56(from), b56(to))
+func mergeGoFlagSet(hidden bool, pfs *pflag.FlagSet, gfs *flag.FlagSet) {
+	pfs.AddGoFlagSet(gfs)
+	if hidden {
+		gfs.VisitAll(func(f *flag.Flag) {
+			pfs.MarkHidden(f.Name)
+		})
+	}
 }
 
-// Merged returns a boolean indicating whether the default FlagSets
-// (i.e.  flag.CommandLine and pflag.CommandLine) have already been merged.
-func Merged() bool {
-	return FlagSetsMerged(flag.CommandLine, pflag.CommandLine)
+//----------------------------------------------------------------------------
+
+// FlagsGroup is a collection of FlagSets (from either the standard library or
+// github.com/spf13/pflag) that may be merged and kept in sync as needed.
+type FlagsGroup struct {
+	fsm  fsMap
+	base *pflag.FlagSet
 }
 
-// FlagSetsMerged returns a boolean indicating whether the given FlagSets
-// have already been merged.
-func FlagSetsMerged(from *flag.FlagSet, to *pflag.FlagSet) bool {
-	return merged[mergeKey(from, to)]
+// NewFlagsGroup creates a new FlagsGroup that includes the default FlagSet
+// from both the standard flag library and github.com/spf13/pflag.
+//
+// Note that all flags defined by the standard flag library are marked as
+// Hidden in this FlagsGroup's base FlagSet (but they should still function
+// properly). See pflag.MarkHidden for more info.
+func NewFlagsGroup() *FlagsGroup {
+	fm := newSetterMap()
+
+	fm.addGoFlagSet(GoFlagSet)
+	fm.addFlagSet(PFlagSet)
+
+	pfs := pflag.NewFlagSet(FlagSetName, pflag.ContinueOnError)
+	pfs.AddFlagSet(PFlagSet)
+	pfs.SortFlags = PFlagSet.SortFlags
+
+	return &FlagsGroup{fm, pfs}
 }
 
-// MergeFlags is a convenience wrapper around MergeFlagSets(flag.CommandLine, pflag.CommandLine).
-func MergeFlags() error {
-	return MergeFlagSets(flag.CommandLine, pflag.CommandLine)
+// SetPrimary sets the primary FlagSet to be p instead of the default created
+// by NewFlagsGroup.
+func (g *FlagsGroup) SetPrimary(p *pflag.FlagSet) {
+	sf := p.SortFlags
+	p.AddFlagSet(g.base)
+	g.base = p
+	g.base.SortFlags = sf
 }
 
-// MergeFlagSets merges flags in the from flag.FlagSet into the to
-// pflag.FlagSet.  If either FlagSet has previously been parsed, or if
-// any flag names conflict between the two FlagSets, error is returned.
-func MergeFlagSets(from *flag.FlagSet, to *pflag.FlagSet) error {
-	mkey := mergeKey(from, to)
-	if merged[mkey] {
-		return nil
+// AddFlagSet adds a new pflag.FlagSet to this FlagsGroup by first adding the
+// new FlagSet to the FlagsGroup base and then adding the FlagsGroup base to
+// the new FlagSet.
+// See pflag.AddFlagSet for details about flag conflicts.
+func (g *FlagsGroup) AddFlagSet(o *pflag.FlagSet) {
+	g.base.AddFlagSet(o)
+	g.fsm.addFlagSet(o)
+	o.AddFlagSet(g.base)
+}
+
+// AddGoFlagSet adds a new flag.FlagSet (from the standard library) to this
+// FlagsGroup.  Unlike the default FlagSet, these flags are not marked as
+// Hidden in the FlagsGroup's base FlagSet.
+func (g *FlagsGroup) AddGoFlagSet(o *flag.FlagSet) {
+	mergeGoFlagSet(false, g.base, o)
+}
+
+// VisitAll exposes the method of the same name on the FlagsGroup base FlagSet.
+func (g *FlagsGroup) VisitAll(vf func(*pflag.Flag)) {
+	g.base.VisitAll(vf)
+}
+
+// Parse is a convenience wrapper around ParseArgs(os.Args[1:])
+func (g *FlagsGroup) Parse() error {
+	return g.ParseArgs(CommandLineArgs)
+}
+
+// ParseArgs calls Parse on the base FlagSet with the given args. It then
+// merges the newly set flag values info each of the FlagsGroup's other
+// FlagSets.
+func (g *FlagsGroup) ParseArgs(args []string) error {
+	g.base.Parse(args)
+
+	if err := g.fsm.merge(g.base); err != nil {
+		return err
 	}
 
-	if from.Parsed() {
-		return baseParsedError
+	GoFlagSet.Parse(nil)
+	PFlagSet.Parse(nil)
+
+	debugf("##### Flags Parsed and Merged")
+
+	return nil
+}
+
+// ValueIsSet returns the value of the flag 'name' and a boolean indicating
+// whether the value was modified by the parsed command line arguments.
+func (g *FlagsGroup) ValueIsSet(name string) (string, bool) {
+	f := g.base.Lookup(name)
+	if f == nil {
+		return "", false
 	}
 
-	if to.Parsed() {
-		return spf13ParsedError
+	return f.Value.String(), g.base.Changed(name)
+}
+
+// Set is used to set flag 'name' to 'val' in all included FlagSets. If the
+// value of 'val' cannot be applied to this flag, an error is returned.
+func (g *FlagsGroup) Set(name, val string) error {
+	if err := g.base.Set(name, val); err != nil {
+		return err
 	}
 
-	var nc []string
+	debugf("Setting %s=%q", name, val)
+	if err := g.fsm.set(name, val); err != nil {
+		return err
+	}
 
-	from.VisitAll(func(f *flag.Flag) {
-		if xf := to.Lookup(f.Name); xf != nil {
-			nc = append(nc, f.Name)
-			return
-		}
-		to.AddGoFlag(f)
+	return nil
+}
+
+//----------------------------------------------------------------------------
+
+type setter interface {
+	Set(string, string) error
+}
+
+type fsMap map[string][]setter
+
+func newSetterMap() fsMap {
+	return fsMap(make(map[string][]setter))
+}
+
+func (fm *fsMap) add(name string, setr setter) {
+	(*fm)[name] = append((*fm)[name], setr)
+}
+
+func (fm *fsMap) addGoFlagSet(fs *flag.FlagSet) {
+	fs.VisitAll(func(f *flag.Flag) {
+		(*fm)[f.Name] = append((*fm)[f.Name], fs)
+	})
+}
+
+func (fm *fsMap) addFlagSet(fs *pflag.FlagSet) {
+	fs.VisitAll(func(f *pflag.Flag) {
+		(*fm)[f.Name] = append((*fm)[f.Name], fs)
+	})
+}
+
+func (fm *fsMap) merge(fs *pflag.FlagSet) error {
+	vmap := make(map[string]string)
+	fs.Visit(func(f *pflag.Flag) {
+		vmap[f.Name] = f.Value.String()
 	})
 
-	if len(nc) > 0 {
-		return newMergeConflictError(nc)
-	}
-
-	merged[mkey] = true
-	return nil
-}
-
-func MergeAndParse() error {
-	if err := MergeFlags(); err != nil {
-		return err
-	}
-
-	if err := pflag.CommandLine.Parse(cmdlineArgs); err != nil {
-		return err
+	for n, v := range vmap {
+		debugf("Merging --%s=%q", n, v)
+		if err := fm.set(n, v); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// MergeConflictError is returned by MergeFlagSets or MergeFlags if the
-// FlagSets being merged share flags of the same name.
-type MergeConflictError struct {
-	names []string
-}
-
-func newMergeConflictError(flags []string) *MergeConflictError {
-	return &MergeConflictError{names: flags}
-}
-
-// IsMergeConflictError returns a boolean indicating whether the given error is
-// a MergeConflictError error.
-func IsMergeConflictError(err error) bool {
-	_, ok := err.(*MergeConflictError)
-	return ok
-}
-
-// Conflicts returns the list of common flag names that triggered the
-// MergeConflictError.
-func (e *MergeConflictError) Conflicts() []string {
-	return e.names
-}
-
-func (e *MergeConflictError) Error() string {
-	suf := ""
-	if len(e.names) > 1 {
-		suf = "s"
+func (fm *fsMap) set(name, val string) error {
+	for _, s := range (*fm)[name] {
+		if debug {
+			debugf("    %s -> %s", name, identFlagSet(s))
+		}
+		if err := s.Set(name, val); err != nil {
+			return err
+		}
 	}
-	return fmt.Sprintf("name conflict%s merging flags: %v", suf, e.names)
+	return nil
 }
+
+//----------------------------------------------------------------------------
+
+func debugf(msg string, args ...interface{}) {
+	if !debug {
+		return
+	}
+
+	var file string
+	var line int
+	var ok bool
+
+	if _, file, line, ok = runtime.Caller(1); ok {
+		if s := strings.LastIndex(file, "/"); s >= 0 {
+			file = file[s+1:]
+		}
+	} else {
+		file = "???"
+		line = 1
+	}
+
+	fmt.Fprintf(os.Stderr, "D%s %7d %s:%d] %s\n",
+		timenow().Format("0102 15:04:05.000000"),
+		pid, file, line, fmt.Sprintf(msg, args...))
+}
+
+//----------------------------------------------------------------------------
+
+func identFlagSet(i interface{}) string {
+	var t string
+	var v reflect.Value
+
+	switch i.(type) {
+	case *flag.FlagSet:
+		t = "flag"
+		v = reflect.ValueOf(i).Elem()
+
+	case *pflag.FlagSet:
+		t = "pflag"
+		v = reflect.ValueOf(i).Elem()
+
+	case flag.FlagSet:
+		t = "flag"
+		v = reflect.ValueOf(i)
+
+	case pflag.FlagSet:
+		t = "pflag"
+		v = reflect.ValueOf(i)
+	}
+
+	if t == "" {
+		return t
+	}
+
+	return t + ":" + v.FieldByName("name").String()
+}
+
+//----------------------------------------------------------------------------

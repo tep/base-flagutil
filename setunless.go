@@ -1,15 +1,11 @@
 package flagutil
 
-import "github.com/spf13/pflag"
-
-func SetUnless(name, value string) (bool, error) {
-	if _, ok, err := ValueIsSet(name); err != nil {
-		return false, err
-	} else if ok {
+func (g *FlagsGroup) SetUnless(name, value string) (bool, error) {
+	if _, ok := g.ValueIsSet(name); ok {
 		return false, nil
 	}
 
-	if err := pflag.Set(name, value); err != nil {
+	if err := g.Set(name, value); err != nil {
 		return false, err
 	}
 
