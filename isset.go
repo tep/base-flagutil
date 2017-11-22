@@ -1,5 +1,6 @@
 package flagutil
 
+/*
 import "github.com/spf13/pflag"
 
 func ValueIsSet(name string) (string, bool, error) {
@@ -24,3 +25,4 @@ func ValueIsSet(name string) (string, bool, error) {
 
 	return value, isSet, nil
 }
+*/

@@ -38,4 +38,5 @@ func resetForTest(name string) {
 
 	flag.CommandLine = flag.NewFlagSet("test:"+name, flag.ContinueOnError)
 	pflag.CommandLine = pflag.NewFlagSet("test:"+name, pflag.ContinueOnError)
+	pFlagSet = pflag.CommandLine
 }
