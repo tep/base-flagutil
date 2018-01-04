@@ -119,7 +119,7 @@ func (g *FlagsGroup) Parse() error {
 }
 
 // ParseArgs calls Parse on the base FlagSet with the given args. It then
-// merges the newly set flag values info each of the FlagsGroup's other
+// merges the newly set flag values into each of the FlagsGroup's other
 // FlagSets.
 func (g *FlagsGroup) ParseArgs(args []string) error {
 	g.base.Parse(args)
