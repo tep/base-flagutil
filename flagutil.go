@@ -164,28 +164,55 @@ func (g *FlagsGroup) Set(name, val string) error {
 
 //----------------------------------------------------------------------------
 
-type setter interface {
-	Set(string, string) error
+type flagSet struct {
+	pfs  *pflag.FlagSet
+	gfs  *flag.FlagSet
+	name string
 }
 
-type fsMap map[string][]setter
+func (fs *flagSet) set(name, value string) error {
+	if fs.pfs != nil {
+		return fs.pfs.Set(name, value)
+	}
+
+	return fs.gfs.Set(name, value)
+}
+
+func (fs *flagSet) get(name string) string {
+	if fs.pfs != nil {
+		f := fs.pfs.Lookup(name)
+		if f == nil {
+			return ""
+		}
+		return f.Value.String()
+	}
+
+	f := fs.gfs.Lookup(name)
+	if f == nil {
+		return ""
+	}
+	return f.Value.String()
+}
+
+//----------------------------------------------------------------------------
+
+type fsMap map[string][]*flagSet
 
 func newSetterMap() fsMap {
-	return fsMap(make(map[string][]setter))
+	fm := fsMap(make(map[string][]*flagSet))
+	return fm
 }
 
-func (fm *fsMap) add(name string, setr setter) {
-	(*fm)[name] = append((*fm)[name], setr)
-}
-
-func (fm *fsMap) addGoFlagSet(fs *flag.FlagSet) {
-	fs.VisitAll(func(f *flag.Flag) {
+func (fm *fsMap) addGoFlagSet(gfs *flag.FlagSet) {
+	fs := &flagSet{gfs: gfs, name: identFlagSet(gfs)}
+	gfs.VisitAll(func(f *flag.Flag) {
 		(*fm)[f.Name] = append((*fm)[f.Name], fs)
 	})
 }
 
-func (fm *fsMap) addFlagSet(fs *pflag.FlagSet) {
-	fs.VisitAll(func(f *pflag.Flag) {
+func (fm *fsMap) addFlagSet(pfs *pflag.FlagSet) {
+	fs := &flagSet{pfs: pfs, name: identFlagSet(pfs)}
+	pfs.VisitAll(func(f *pflag.Flag) {
 		(*fm)[f.Name] = append((*fm)[f.Name], fs)
 	})
 }
@@ -207,14 +234,18 @@ func (fm *fsMap) merge(fs *pflag.FlagSet) error {
 }
 
 func (fm *fsMap) set(name, val string) error {
-	for _, s := range (*fm)[name] {
-		if debug {
-			debugf("    %s -> %s", name, identFlagSet(s))
+	for _, fs := range (*fm)[name] {
+		if v := fs.get(name); v == val {
+			debugf("    skipping --%s=%q for %s", name, val, fs.name)
+			continue
 		}
-		if err := s.Set(name, val); err != nil {
+
+		debugf("    --%s=%q -> %s", name, val, fs.name)
+		if err := fs.set(name, val); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
