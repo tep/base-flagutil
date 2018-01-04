@@ -128,8 +128,8 @@ func (g *FlagsGroup) ParseArgs(args []string) error {
 		return err
 	}
 
-	GoFlagSet.Parse(nil)
-	PFlagSet.Parse(nil)
+	GoFlagSet.Parse(g.base.Args())
+	PFlagSet.Parse(g.base.Args())
 
 	debugf("##### Flags Parsed and Merged")
 
