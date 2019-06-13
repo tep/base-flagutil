@@ -13,13 +13,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-// TODO(tep): Move this to "toolman.org/flags/flagsgroup"
-
 package flagutil // import "toolman.org/base/flagutil"
 
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"runtime"
@@ -27,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kr/pretty"
 	"github.com/spf13/pflag"
 )
 
@@ -91,6 +91,10 @@ func (g *FlagsGroup) SetPrimary(p *pflag.FlagSet) {
 	g.base.SortFlags = sf
 }
 
+func (g *FlagsGroup) DumpTo(w io.Writer) {
+	fmt.Fprintf(w, "%s", pretty.Sprint(g))
+}
+
 // AddFlagSet adds a new pflag.FlagSet to this FlagsGroup by first adding the
 // new FlagSet to the FlagsGroup base and then adding the FlagsGroup base to
 // the new FlagSet.
@@ -122,14 +126,18 @@ func (g *FlagsGroup) Parse() error {
 // merges the newly set flag values into each of the FlagsGroup's other
 // FlagSets.
 func (g *FlagsGroup) ParseArgs(args []string) error {
+	debugf("##### Parsing args: %v", args)
 	g.base.Parse(args)
 
+	debugf("##### Merging args: %v", args)
 	if err := g.fsm.merge(g.base); err != nil {
 		return err
 	}
 
-	GoFlagSet.Parse(g.base.Args())
-	PFlagSet.Parse(g.base.Args())
+	debugf("Args for GoFlagSet: %v", g.base.Args())
+
+	// GoFlagSet.Parse(g.base.Args())
+	// PFlagSet.Parse(g.base.Args())
 
 	debugf("##### Flags Parsed and Merged")
 
@@ -199,7 +207,7 @@ func (fs *flagSet) get(name string) string {
 type fsMap map[string][]*flagSet
 
 func newSetterMap() fsMap {
-	fm := fsMap(make(map[string][]*flagSet))
+	fm := make(fsMap)
 	return fm
 }
 
